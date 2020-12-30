@@ -3,24 +3,26 @@ import dash
 import dash_core_components as dcc
 import dash_html_components as html
 import dash_bootstrap_components as dbc
-from dash.dependencies import Output, Input, State
+from dash.dependencies import Output, Input
 import plotly.express as px
 import pandas as pd
 import numpy as np
-import nltk
-import seaborn as sns
-from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.manifold import TSNE
-from gensim.models import word2vec
+from gensim.models import KeyedVectors
 
-df = pd.read_excel("C:/Users/rlope/Documents/Data for Projects/Hotel/processed hotel reviews.xlsb", engine='pyxlsb')
+PLOTLY_LOGO = "https://images.plot.ly/logo/new-branding/plotly-logomark.png"
+
+df = pd.read_excel("/home/rlopezra/mysite/data/cleaned reviews.xlsb", engine='pyxlsb')
 df['pos_tokens'] = df['pos_tokens'].apply(lambda x: [re.sub(' ','_',i) for i in re.findall(r"'([^']*)'", x)])
+
 country_list = df['Reviewer_Nationality'].unique()
 country_list.sort()
-
 df_copy = df.copy()
 df_explode = df_copy.explode('pos_tokens')
 
+#Word2Vect corpus and model
+corpus = df_copy['pos_tokens'].to_list()
+model = KeyedVectors.load_word2vec_format("/home/rlopezra/mysite/data/model.bin", binary=True, unicode_errors='ignore')
 
 def td_idf(data, group, token):
     # getting word count in each group
@@ -51,8 +53,56 @@ def td_idf(data, group, token):
 
     return tf_idf
 
+def tsne_data(model, compl):
+    "Creates and TSNE model and plots it"
+    labels = []
+    tokens = []
+
+    for word in model.wv.vocab:
+        tokens.append(model[word])
+        labels.append(word)
+
+    tsne_model = TSNE(perplexity=compl, n_components=2, init='pca', n_iter=2500, random_state=23)
+    new_values = tsne_model.fit_transform(tokens)
+
+    x = []
+    y = []
+    for value in new_values:
+        x.append(value[0])
+        y.append(value[1])
+
+    df = pd.DataFrame({"token": labels,
+                       "x": x,
+                       "y": y})
+
+    return df
+
 
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
+server = app.server
+
+NAVBAR = dbc.Navbar(
+    children=[
+        html.A(
+            # Use row and col to control vertical alignment of logo / brand
+            dbc.Row(
+                [
+                    dbc.Col(html.Img(src=PLOTLY_LOGO, height="30px")),
+                    dbc.Col(
+                        dbc.NavbarBrand("Ronald Lopez's Plotly NLP Dashboard", className="ml-2")
+                    ),
+                ],
+                align="center",
+                no_gutters=True,
+            ),
+            href="https://plot.ly",
+        )
+    ],
+    color="dark",
+    dark=True,
+    sticky="top",
+)
+
 
 TOP_FREQUENCY_COMPS = [
     dbc.CardHeader(html.H5("Comparison of most frequently used words for two nationalities")),
@@ -78,7 +128,7 @@ TOP_FREQUENCY_COMPS = [
                                             {"label": i, "value": i}
                                             for i in country_list
                                         ],
-                                        value="United Kingdom",
+                                        value=" Belgium ",
                                     )
                                 ],
                                 md=6,
@@ -91,7 +141,7 @@ TOP_FREQUENCY_COMPS = [
                                             {"label": i, "value": i}
                                             for i in country_list
                                         ],
-                                        value="United States of America",
+                                        value=" United States of America ",
                                     )
                                 ],
                                 md=6,
@@ -109,14 +159,56 @@ TOP_FREQUENCY_COMPS = [
     ),
 ]
 
+Word2Vec = [
+    dbc.CardHeader(html.H5("Displaying a Word Embedding in Two-Dimensional Space")),
+    dbc.CardBody(
+        [
+            dcc.Loading(
+                id="loading-bigrams-scatter",
+                children=[
+                    dbc.Alert(
+                        "Something's gone wrong! Give us a moment, but try loading this page again if problem persists.",
+                        id="no-data-alert-bigrams",
+                        color="warning",
+                        style={"display": "none"},
+                    ),
+                    dbc.Row(
+                        [
+                            dbc.Col(html.P(["Choose a t-SNE perplexity value:"]), md=6),
+                            dbc.Col(
+                                [
+                                    dcc.Dropdown(
+                                        id="w2v-perplex-dropdown",
+                                        options=[
+                                            {"label": str(i), "value": i}
+                                            for i in range(25, 525, 25)
+                                        ],
+                                        value=50,
+                                    )
+                                ],
+                                md=3,
+                            ),
+                        ]
+                    ),
+                    dcc.Graph(id="w2v-scatter"),
+                ],
+                type="default",
+            )
+        ],
+        style={"marginTop": 0, "marginBottom": 0},
+    ),
+]
+
 BODY = dbc.Container(
     [
         dbc.Row([dbc.Col(dbc.Card(TOP_FREQUENCY_COMPS)), ], style={"marginTop": 30}),
+        dbc.Row([dbc.Col(dbc.Card(Word2Vec)), ], style={"marginTop": 30})
     ],
     className="mt-12",
 )
 
-app.layout = html.Div(children=[BODY])
+
+app.layout = html.Div(children=[NAVBAR, BODY])
 
 
 @app.callback(
@@ -150,7 +242,7 @@ def country_comparisons(country_1, country_2):
     top_idf = px.bar(top_tfidf, x="tf_idf", y="pos_tokens", facet_col="Reviewer_Nationality",
                      title="Most Important Words", facet_col_spacing=0.1, hover_data=["tf_idf"],
                      labels={'tf_idf': '', 'pos_tokens': ''}).update_yaxes(matches=None, showticklabels=True, col=2)
-    freq_scat = px.scatter(sub_set_reformat, x=countries[0], y=countries[1], trendline="ols", hover_name="pos_tokens")
+    freq_scat = px.scatter(sub_set_reformat, x=countries[1], y=countries[0], trendline="ols", hover_name="pos_tokens")
 
     return (
         top_10,
@@ -158,6 +250,16 @@ def country_comparisons(country_1, country_2):
         freq_scat
     )
 
-#http://localhost:8050/ if it doesn't connect
+
+@app.callback(
+    Output("w2v-scatter", "figure"),
+    Input("w2v-perplex-dropdown", "value"))
+def w2v_update(complexity):
+    w2v_df = tsne_data(model, complexity)
+
+    w2v_scat = px.scatter(w2v_df, x='x', y='y', hover_name="token", labels={'x':' ', 'y':' '})
+
+    return w2v_scat
+
 if __name__ == '__main__':
     app.run_server(debug=True)
