@@ -177,13 +177,13 @@ Word2Vec = [
                             dbc.Col(html.P(["Choose a t-SNE perplexity value:"]), md=6),
                             dbc.Col(
                                 [
-                                    dcc.Dropdown(
-                                        id="w2v-perplex-dropdown",
-                                        options=[
-                                            {"label": str(i), "value": i}
-                                            for i in range(25, 525, 25)
-                                        ],
+                                    dcc.Slider(
+                                        id='complex-slider',
+                                        min=50,
+                                        max=700,
                                         value=50,
+                                        marks={str(i): str(i)  for i in range(50, 750, 50)},
+                                        step=None
                                     )
                                 ],
                                 md=3,
@@ -252,7 +252,7 @@ def country_comparisons(country_1, country_2):
 
 
 @app.callback(
-    Output("w2v-scatter", "figure"),
+    Output("complex-slider", "figure"),
     Input("w2v-perplex-dropdown", "value"))
 def w2v_update(complexity):
     w2v_df = tsne_data(model, complexity)
