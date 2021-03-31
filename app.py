@@ -21,7 +21,6 @@ df_copy = df.copy()
 df_explode = df_copy.explode('pos_tokens')
 
 #Word2Vect corpus and model
-corpus = df_copy['pos_tokens'].to_list()
 model = KeyedVectors.load_word2vec_format("/home/rlopezra/mysite/data/model.bin", binary=True, unicode_errors='ignore')
 
 def td_idf(data, group, token):
