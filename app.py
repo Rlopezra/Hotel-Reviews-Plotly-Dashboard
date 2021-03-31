@@ -20,9 +20,10 @@ country_list.sort()
 df_copy = df.copy()
 df_explode = df_copy.explode('pos_tokens')
 
-#Word2Vect corpus and model
+#Trained Word2Vec model
 model = KeyedVectors.load_word2vec_format("/home/rlopezra/mysite/data/model.bin", binary=True, unicode_errors='ignore')
 
+# TD-IDF function
 def td_idf(data, group, token):
     # getting word count in each group
     counts = data.groupby(group)[token].value_counts().to_frame().rename(columns={token: 'n_w'})
@@ -52,6 +53,7 @@ def td_idf(data, group, token):
 
     return tf_idf
 
+# Create Word2Vec scatterplot
 def tsne_data(model, compl):
     "Creates and TSNE model and plots it"
     labels = []
@@ -76,7 +78,7 @@ def tsne_data(model, compl):
 
     return df
 
-
+# Dashboard Layout
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 server = app.server
 
@@ -217,6 +219,7 @@ BODY = dbc.Container(
 
 app.layout = html.Div(children=[NAVBAR, BODY])
 
+# Dashboard Callbacks
 @app.callback(
     Output("top_10", "figure"),
     Output("top_idf", "figure"),
